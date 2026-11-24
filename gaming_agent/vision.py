@@ -106,13 +106,29 @@ def route(image, player, target, width, height):
                 min(rows - 1, round(blob.y * h / height / step)))
 
     start, end = cell(player), cell(target)
+
+    def clear(a, b):
+        ax, ay = a
+        bx, by = b
+        if ay == by:
+            cells = blocked[ay, min(ax, bx):max(ax, bx) + 1]
+        else:
+            cells = blocked[min(ay, by):max(ay, by) + 1, ax]
+        return not cells.any()
+
+    sx, sy = start
+    ex, ey = end
+    dx, dy = target.x - player.x, target.y - player.y
+    horizontal = abs(dx) / width >= abs(dy) / height
+    x_first, y_first = (ex, sy), (sx, ey)
+    first, second = (x_first, y_first) if horizontal else (y_first, x_first)
+    if clear(start, first) and clear(first, end):
+        return None
+    if second != start and clear(start, second) and clear(second, end):
+        return (0, dy) if horizontal else (dx, 0)
+
     queue = deque([start])
     visited = {start: None}
-    dx, dy = end[0] - start[0], end[1] - start[1]
-    span = max(abs(dx), abs(dy))
-    if not any(blocked[round(start[1] + i * dy / span), round(start[0] + i * dx / span)]
-               for i in range(1, span + 1)):
-        return None
     while queue:
         x, y = queue.popleft()
         if (x, y) == end:

@@ -44,6 +44,15 @@ def test_route_avoids_crossing_visible_wall():
                  Blob(221, 116, "yellow", 20, 0), 320, 240)[0] == 0
 
 
+def test_maze_steering_checks_axis_even_when_diagonal_is_clear():
+    obs = observation("Guide the green avatar around walls to collect yellow coins.", "Use arrow keys.",
+                      objects=[("#37ff35", (102, 172, 118, 188)), ("yellow", (250, 76, 266, 92)),
+                               ("#586477", (160, 172, 215, 191))])
+    tool, params = Policy().step(obs, tool_specs())
+    assert tool == "press_key"
+    assert params["key"] == "ArrowUp"
+
+
 def test_feedback_and_elapsed_rollback():
     policy = Policy()
     specs = tool_specs()
