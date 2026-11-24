@@ -103,3 +103,14 @@ def test_model_freshness_and_schema_fallback():
 
     obs = observation(controls="Press Enter")
     assert Policy(InvalidModel()).step(obs, tool_specs())[0] == "press_key"
+
+
+def test_model_action_with_forbidden_parameter_falls_back_to_cpu():
+    class InvalidModel:
+        def poll(self, *_):
+            return {"tool": "click", "params": {"x": 20, "y": 30, "forbidden": True}}
+
+    obs = observation(controls="Press Enter")
+    assert Policy(InvalidModel()).step(obs, tool_specs()) == (
+        "press_key", {"key": "Enter", "duration_ms": 200},
+    )

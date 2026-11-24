@@ -74,12 +74,15 @@ class Actions:
                 self.specs[name] = _schema(definition)
 
     def make(self, tool, **params):
+        props = self.specs.get(tool, {}).get("properties")
+        if isinstance(props, Mapping):
+            params = {k: v for k, v in params.items() if k in props}
+        return self._validate(tool, params)
+
+    def _validate(self, tool, params):
         if tool not in self.specs:
             return None
         spec = self.specs[tool]
-        props = spec.get("properties")
-        if isinstance(props, Mapping):
-            params = {k: v for k, v in params.items() if k in props}
         for key, value in params.items():
             bounds = {
                 "x": self.width, "y": self.height, "from_x": self.width, "from_y": self.height,
@@ -115,4 +118,4 @@ class Actions:
             return None
         tool, params = proposal.get("tool"), proposal.get("params")
         if isinstance(tool, str) and isinstance(params, dict):
-            return self.make(tool, **params)
+            return self._validate(tool, params)
