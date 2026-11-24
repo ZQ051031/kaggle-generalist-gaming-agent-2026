@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Synthetic browser games</title>
+<style>body{margin:0;background:#101521}canvas{display:block}</style>
+<canvas width="320" height="240" tabindex="0" aria-label="Synthetic browser game"></canvas>
+<script>
+const canvas = document.querySelector("canvas"), ctx = canvas.getContext("2d");
+const w = canvas.width, h = canvas.height;
+const inputs = new Set();
+let game, frame, score, actor, object, rng, cursor;
+const wall = [147, 96, 173, 153];
+const random = () => ((rng = (Math.imul(rng, 1664525) + 1013904223) >>> 0) / 4294967296);
+const bounded = (x, low, high) => Math.min(high, Math.max(low, x));
+const within = (x, y, target, radius) => Math.hypot(x - target.x, y - target.y) <= radius;
+const circle = (x, y, r, color) => {
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+};
+
+function spawn() {
+  if (game === "catch") {
+    object = {x: 26 + random() * 268, y: 30};
+  } else {
+    do {
+      object = {x: 24 + random() * 272, y: 43 + random() * 172};
+    } while (game === "maze" && object.x > 122 && object.x < 198 &&
+             object.y > 75 && object.y < 176);
+  }
+}
+
+function render() {
+  ctx.fillStyle = "#101521"; ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = "#242c3a"; ctx.fillRect(0, 0, w, 24);
+  ctx.fillStyle = "#d7ddea"; ctx.font = "bold 14px monospace";
+  ctx.fillText(`SCORE ${score}`, 8, 17);
+  if (game === "aim") {
+    circle(object.x, object.y, 12, "#ed3528");
+    circle(object.x, object.y, 4, "#f8e8e7");
+    circle(cursor.x, cursor.y, 2, "#ffffff");
+  } else if (game === "catch") {
+    circle(object.x, object.y, 8, "#f5ed17");
+    ctx.fillStyle = "#43e54a"; ctx.fillRect(actor.x - 17, actor.y, 34, 10);
+  } else {
+    ctx.fillStyle = "#586477"; ctx.fillRect(wall[0], wall[1], wall[2]-wall[0], wall[3]-wall[1]);
+    circle(object.x, object.y, 8, "#f5ed17");
+    ctx.fillStyle = "#35ed44"; ctx.fillRect(actor.x - 8, actor.y - 8, 16, 16);
+  }
+}
+
+canvas.addEventListener("click", ({clientX, clientY}) => {
+  if (game === "aim" && within(clientX, clientY, object, 12)) { score++; spawn(); }
+});
+canvas.addEventListener("mousemove", ({clientX, clientY}) => {
+  cursor = {x: clientX, y: clientY};
+});
+canvas.addEventListener("mousedown", () => canvas.focus());
+canvas.addEventListener("keydown", ({key}) => inputs.add(key));
+canvas.addEventListener("keyup", ({key}) => inputs.delete(key));
+
+function send(event) {
+  if (event.type.startsWith("key")) {
+    canvas.dispatchEvent(new KeyboardEvent(event.type, {key: event.key, bubbles: true}));
+  } else if (event.type === "wheel") {
+    canvas.dispatchEvent(new WheelEvent("wheel", {...event, bubbles: true}));
+  } else {
+    canvas.dispatchEvent(new MouseEvent(event.type, {...event, bubbles: true}));
+  }
+}
+
+function update(events) {
+  for (const event of events) send(event);
+  frame++;
+  if (game !== "aim") {
+    const dx = Number(inputs.has("ArrowRight")) - Number(inputs.has("ArrowLeft"));
+    const dy = Number(inputs.has("ArrowDown")) - Number(inputs.has("ArrowUp"));
+    const x = bounded(actor.x + dx * 3.2, 17, w - 17);
+    if (game === "catch") {
+      actor.x = x; object.y += 3.5;
+      if (object.y >= actor.y) {
+        if (Math.abs(object.x - actor.x) < 22) score++;
+        spawn();
+      }
+    } else {
+      const y = bounded(actor.y + dy * 3.2, 36, h - 10);
+      if (x < wall[0] - 8 || x > wall[2] + 8 || y < wall[1] - 8 || y > wall[3] + 8)
+        actor = {x, y};
+      if (within(actor.x, actor.y, object, 14)) { score++; spawn(); }
+    }
+  }
+  render();
+  return snapshot();
+}
+
+function snapshot() {
+  return { image: canvas.toDataURL("image/jpeg", .81).split(",")[1], frame, score };
+}
+
+window.synthetic = {
+  start: (id, seed) => {
+    game = id; rng = seed; frame = score = 0; inputs.clear();
+    actor = {x: w / 2, y: 216};
+    cursor = {x: w / 2, y: h / 2};
+    spawn(); render(); return snapshot();
+  },
+  advance: batches => batches.map(update)
+};
+</script>
+</html>
