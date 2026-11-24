@@ -3,7 +3,7 @@ import base64
 import math
 import os
 import shutil
-from collections import defaultdict, deque
+from collections import defaultdict
 from pathlib import Path
 from time import perf_counter
 
@@ -127,29 +127,20 @@ def _run_game(page, policy, game, seconds, seed, simulated_latency):
         latencies.append(ms)
         if ms >= 90_000:
             break
-        if simulated_latency:
-            advance = max(STRIDE, math.ceil(ms / (FRAME_MS * STRIDE)) * STRIDE)
-        else:
-            advance = STRIDE
-        frames = deque()
-        rounds = min(limit - frame, advance)
-        if simulated_latency:
-            before = max(0, rounds - STRIDE)
-        else:
-            before = 0
-        if before:
-            earlier = page.evaluate("batches => synthetic.advance(batches)",
-                                    [inputs.event_batch(i) for i in range(frame, frame + before)])
-            frames.extend(base64.b64decode(s["image"]) for s in earlier)
-            frame += before
         previous_action = {"accepted": action is not None, "tool": tool}
-        inputs.replace(frame, action or SKIP)
+        advance = STRIDE
+        if simulated_latency:
+            advance *= max(1, math.ceil(ms / (FRAME_MS * STRIDE)))
+        else:
+            inputs.replace(frame, action or SKIP)
+        arrival = min(limit, frame + advance)
         snapshots = page.evaluate("batches => synthetic.advance(batches)",
-                                  [inputs.event_batch(i) for i in range(frame, frame + rounds - before)])
-        frames.extend(base64.b64decode(s["image"]) for s in snapshots)
-        frames = tuple(frames)
+                                  [inputs.event_batch(i) for i in range(frame, arrival)])
+        frames = tuple(base64.b64decode(s["image"]) for s in snapshots)
         frame = snapshots[-1]["frame"]
         score, image = snapshots[-1]["score"], frames[-1]
+        if simulated_latency and frame < limit:
+            inputs.replace(frame, action or SKIP)
     latencies.sort()
     return {"game": game, "raw": score, "normalized": normalized_score(score, floor * seconds, human * seconds),
             "p95_ms": latencies[math.ceil(len(latencies) * .95) - 1]}

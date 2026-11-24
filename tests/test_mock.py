@@ -1,5 +1,6 @@
 import pytest
 
+from gaming_agent import mock
 from gaming_agent.mock import Inputs, normalized_score, run
 
 
@@ -32,3 +33,35 @@ def test_browser_benchmark_runs_one_policy_across_games():
     assert results[1]["raw"] >= 1
     assert results[2]["raw"] >= 1
     assert all(0 <= row["normalized"] <= 1 and row["p95_ms"] < 90_000 for row in results)
+
+
+@pytest.mark.parametrize(("seconds_per_reply", "arrival_frame"), [(0.05, 4), (0.25, 8)])
+def test_simulated_replies_land_at_the_next_decision_boundary(monkeypatch, seconds_per_reply, arrival_frame):
+    class Page:
+        frame = 0
+        click_frames = []
+
+        def evaluate(self, js, args):
+            if "synthetic.start" in js:
+                return {"image": "eA=="}
+            frames = []
+            for events in args:
+                if any(event["type"] == "click" for event in events):
+                    self.click_frames.append(self.frame)
+                self.frame += 1
+                frames.append({"frame": self.frame, "image": "eA==", "score": len(self.click_frames)})
+            return frames
+
+    class Policy:
+        clock = 0.0
+
+        def step(self, obs, specs):
+            self.clock += seconds_per_reply
+            if obs.elapsed_s == 0:
+                return "click", {"x": 20, "y": 20}
+            return "skip", {}
+
+    page, policy = Page(), Policy()
+    monkeypatch.setattr(mock, "perf_counter", lambda: policy.clock)
+    mock._run_game(page, policy, "aim", 1.2, 23, True)
+    assert page.click_frames == [arrival_frame]
